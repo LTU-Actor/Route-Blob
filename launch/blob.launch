@@ -1,5 +1,5 @@
 <launch>
   <node pkg="ltu_actor_route_blob" type="blob" name="blob">
-    <param name="input" value="/camera/input_raw" />
+    <param name="input" value="/camera/image_raw" />
   </node>
 </launch>

@@ -76,11 +76,10 @@ Blob::Blob()
 {
     if (!nh.getParam("input", camera_topic))
     {
-        ROS_ERROR_STREAM("No camera topic passed to /actor_input/dashcam");
+        ROS_ERROR_STREAM("No camera topic passed to " + camera_topic);
         throw std::invalid_argument("Bad camera topic");
     }
 
-    // TODO: read cam topic
     image_sub = it.subscribe(camera_topic, 1, &Blob::dashcamCB, this);
 
     debug_pub_blob    = it.advertise("debug_blob", 1);
@@ -373,7 +372,9 @@ float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
 }
 
 bool Blob::hasSub(){
-    return twist_pub.getNumSubscribers();
+    return (twist_pub.getNumSubscribers() | debug_pub_blob.getNumSubscribers() |
+            debug_pub_lines.getNumSubscribers() | debug_pub_edges.getNumSubscribers() | debug_pub_result.getNumSubscribers()) != 0;
+
 }
 
 bool Blob::isEnabled(){
