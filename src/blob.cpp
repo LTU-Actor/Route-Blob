@@ -29,10 +29,7 @@ private:
     void dashcamCB(const sensor_msgs::ImageConstPtr &);
 
     std::string camera_topic;
-
     bool      enabled = false;
-    bool      show_video = true;
-    bool      ready = false;
 
     // Main camera input
     image_transport::Subscriber image_sub;
@@ -49,15 +46,6 @@ private:
 
     // Server for run-time parameter adjustment
     dynamic_reconfigure::Server<ltu_actor_route_blob::BlobConfig> dyn_server;
-
-    cv::Mat    current_image;
-    std::mutex current_image_mutex;
-    cv::Mat    getCurrentImage()
-    {
-        std::lock_guard<std::mutex> lock(current_image_mutex);
-        ready = false;
-        return current_image;
-    }
 
     struct {
         // Dynamic reconfigure parameters
@@ -82,6 +70,8 @@ Blob::Blob()
 
     image_sub = it.subscribe(camera_topic, 1, &Blob::dashcamCB, this);
 
+    twist_pub = nh.advertise<geometry_msgs::Twist>("cmd", 1);
+
     debug_pub_blob    = it.advertise("debug_blob", 1);
     debug_pub_dilated = it.advertise("debug_dilated", 1);
     debug_pub_lines   = it.advertise("debug_lines", 1);
@@ -105,7 +95,7 @@ void Blob::dynConfigCB(ltu_actor_route_blob::BlobConfig &newconfig, uint32_t lev
 
 void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
 {
-    //ROS_ERROR_STREAM("GOT IMAGE");
+   // ROS_ERROR_STREAM("GOT IMAGE");
     cv_bridge::CvImagePtr cv_ptr;
     try
     {
@@ -117,14 +107,14 @@ void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
         return;
     }
 
-    //ROS_ERROR_STREAM("RUNNING");
 
-    cv::Mat              input;
+    cv::Mat              &input = cv_ptr->image;
     cv::Mat              edges;
     cv::Mat              hsv;
     cv::Mat              display;
     std::vector<cv::Mat> channels(3);
-    input = getCurrentImage();
+    
+   // ROS_ERROR_STREAM("CV_BGR2HSV");
 
     cv::cvtColor(input, hsv, CV_BGR2HSV);
     cv::split(hsv, channels);
@@ -133,6 +123,9 @@ void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
     cv::medianBlur(channels[2], channels[2],
                     config.dynamic.enhance_blur * 2 + 1);
     cv::merge(channels, display);
+
+    //ROS_ERROR_STREAM("CV_HSV2BGR");
+
     cv::cvtColor(display, display, CV_HSV2BGR);
 
     if (config.dynamic.edge_method == 0)
@@ -372,8 +365,8 @@ float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
 }
 
 bool Blob::hasSub(){
-    return (twist_pub.getNumSubscribers() | debug_pub_blob.getNumSubscribers() |
-            debug_pub_lines.getNumSubscribers() | debug_pub_edges.getNumSubscribers() | debug_pub_result.getNumSubscribers()) != 0;
+    return (twist_pub.getNumSubscribers() || debug_pub_blob.getNumSubscribers() ||
+            debug_pub_lines.getNumSubscribers() || debug_pub_edges.getNumSubscribers() || debug_pub_result.getNumSubscribers());
 
 }
 
@@ -383,7 +376,7 @@ bool Blob::isEnabled(){
 
 void Blob::startup(){
     image_sub = it.subscribe(camera_topic, 1, &Blob::dashcamCB, this);
-    enabled = false;
+    enabled = true;
 }
 
 void Blob::shutdown(){
