@@ -14,12 +14,15 @@ find_package(catkin REQUIRED COMPONENTS
   cv_bridge
   geometry_msgs
   rospy
+  roslaunch
   dynamic_reconfigure
   message_generation
   std_msgs
 )
 
 find_package(OpenCV REQUIRED)
+
+roslaunch_add_file_check(launch)
 
 generate_dynamic_reconfigure_options(
   cfg/Blob.cfg

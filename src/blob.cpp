@@ -33,10 +33,6 @@ private:
     bool      enabled = false;
     bool      show_video = true;
     bool      ready = false;
-    ros::Rate limiter;
-
-    // Do callbacks in seperate thread(s)
-    ros::AsyncSpinner rosthreads;
 
     // Main camera input
     image_transport::Subscriber image_sub;
@@ -76,11 +72,9 @@ private:
 
 Blob::Blob()
   : nh{"~"},
-    it(nh),
-    limiter(10),
-    rosthreads(1, ros::getGlobalCallbackQueue())
+    it(nh)
 {
-    if (!ros::param::get("input", camera_topic))
+    if (!nh.getParam("input", camera_topic))
     {
         ROS_ERROR_STREAM("No camera topic passed to /actor_input/dashcam");
         throw std::invalid_argument("Bad camera topic");
@@ -235,8 +229,6 @@ void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
     }
 
     twist_pub.publish(twist);
-
-    limiter.sleep();
 
 }
 
@@ -401,8 +393,9 @@ void Blob::shutdown(){
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "actor_ltu_route_blob");
-    ros::Rate r(10); 
     Blob blob;
+
+    ros::Rate r(10); 
 
     while (ros::ok()){
         if (blob.hasSub()){
@@ -418,7 +411,3 @@ int main(int argc, char **argv)
         r.sleep();
     }
 }
-
-/*
-getNumSubscribers
-*/
