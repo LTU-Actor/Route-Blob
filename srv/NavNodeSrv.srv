@@ -1,9 +1,0 @@
-Header header
-uint32 argc
-string[] keys
-float64[] values
-string topic
-float64 pub_frequency
-bool stop_pub
----
-bool parse_ok

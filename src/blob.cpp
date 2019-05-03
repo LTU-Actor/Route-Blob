@@ -14,7 +14,11 @@
 class Blob {
 public:
     Blob();
-    void run();
+
+    bool hasSub();
+    bool isEnabled();
+    void shutdown();
+    void startup();
 
 private:
     ros::NodeHandle                 nh;
@@ -23,6 +27,8 @@ private:
 
     void dynConfigCB(ltu_actor_route_blob::BlobConfig &config, uint32_t level);
     void dashcamCB(const sensor_msgs::ImageConstPtr &);
+
+    std::string camera_topic;
 
     bool      enabled = false;
     bool      show_video = true;
@@ -74,8 +80,6 @@ Blob::Blob()
     limiter(10),
     rosthreads(1, ros::getGlobalCallbackQueue())
 {
-
-    std::string camera_topic;
     if (!ros::param::get("input", camera_topic))
     {
         ROS_ERROR_STREAM("No camera topic passed to /actor_input/dashcam");
@@ -98,144 +102,7 @@ Blob::Blob()
     dyn_server.setCallback(dynConfigCB);
     dyn_server.getConfigDefault(default_config);
     dynConfigCB(default_config, 0);
-
-    rosthreads.start();
 }
-
-void Blob::run()
-{
-    while (true)
-    {
-        if ((!enabled || !ready || !twist_pub.getNumSubscribers() > 0) && !show_video )
-        {
-            limiter.sleep();
-            //ROS_ERROR_STREAM("SLEEPING");
-            continue;
-        }
-
-        //ROS_ERROR_STREAM("RUNNING");
-
-        cv::Mat              input;
-        cv::Mat              edges;
-        cv::Mat              hsv;
-        cv::Mat              display;
-        std::vector<cv::Mat> channels(3);
-        input = getCurrentImage();
-
-        if (input.empty())
-        {
-            limiter.sleep();
-            continue;
-        }
-
-        cv::cvtColor(input, hsv, CV_BGR2HSV);
-        cv::split(hsv, channels);
-        // Color
-        //channels[2] -= channels[1];
-        cv::medianBlur(channels[2], channels[2],
-                       config.dynamic.enhance_blur * 2 + 1);
-        cv::merge(channels, display);
-        cv::cvtColor(display, display, CV_HSV2BGR);
-
-        if (config.dynamic.edge_method == 0)
-            find_edges(display, edges);
-        else if (config.dynamic.edge_method == 1)
-            find_edges(channels[2], edges);
-        else if (config.dynamic.edge_method == 2)
-        {
-            cv::adaptiveThreshold(
-                channels[2], edges, 255,
-                config.dynamic.adap_use_gauss ? cv::ADAPTIVE_THRESH_MEAN_C
-                                              : cv::ADAPTIVE_THRESH_MEAN_C,
-                cv::THRESH_BINARY, config.dynamic.adap_block_size * 2 + 1,
-                config.dynamic.adap_c);
-        }
-        else
-        {
-            cv::Laplacian(channels[2], edges, -1,
-                          config.dynamic.lapla_ksize * 2 + 1);
-            cv::Sobel(edges, edges, -1, config.dynamic.sobel_xorder,
-                      config.dynamic.sobel_yorder,
-                      config.dynamic.sobel_ksize * 2 + 1);
-        }
-
-        float turn;
-        if (config.dynamic.lines_enable)
-        {
-            cv::Mat lines_mat = cv::Mat::zeros(edges.size(), edges.type());
-            std::vector<cv::Vec4i> lines;
-            cv::Rect               rect =
-                cv::Rect(0, config.dynamic.lines_top * edges.rows, edges.cols,
-                         edges.rows - config.dynamic.lines_top * edges.rows);
-
-            cv::HoughLinesP(edges(rect), lines, config.dynamic.lines_rho,
-                            0.01745329251, config.dynamic.lines_thresh,
-                            config.dynamic.lines_min_len,
-                            config.dynamic.lines_max_gap);
-
-            for (size_t i = 0; i < lines.size(); i++)
-            {
-                cv::Vec4i l = lines[i];
-
-                float diffx = l[0] - l[2];
-                float diffy = l[1] - l[3];
-
-                float slope = diffy / diffx;
-
-                if (std::abs(slope) < config.dynamic.lines_min_slope) continue;
-
-                diffx *= 5;
-                diffy *= 5;
-
-                l[0] -= diffx;
-                l[1] -= diffy;
-                l[2] += diffx;
-                l[3] += diffy;
-
-                cv::line(
-                    lines_mat,
-                    cv::Point(l[0],
-                              l[1] + config.dynamic.lines_top * edges.rows),
-                    cv::Point(l[2],
-                              l[3] + config.dynamic.lines_top * edges.rows),
-                    255, 5);
-            }
-
-            turn = blob_adjust(lines_mat, display);
-
-            debug_img_pub_bw(debug_pub_lines, lines_mat);
-        }
-        else
-        {
-            turn = blob_adjust(edges, display);
-        }
-
-        debug_img_pub_bw(debug_pub_edges, edges);
-        debug_img_pub_color(debug_pub_result, display);
-
-        cv::waitKey(3);
-
-        geometry_msgs::Twist twist;
-        twist.linear.x  = config.dynamic.drive_speed;
-        twist.angular.z = -config.dynamic.blob_mult * turn;
-
-        if (!config.dynamic.enable_drive)
-        {
-            twist.linear.x  = 0;
-            twist.angular.z = 0;
-        }
-        else if (!config.dynamic.enable_forward)
-        {
-            twist.linear.x = 0;
-        }
-
-        if (enabled)
-            twist_pub.publish(twist);
-
-        limiter.sleep();
-    }
-}
-
 
 void Blob::dynConfigCB(ltu_actor_route_blob::BlobConfig &newconfig, uint32_t level)
 {
@@ -257,9 +124,120 @@ void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
         return;
     }
 
-    std::lock_guard<std::mutex> lock(current_image_mutex);
-    current_image = cv_ptr->image;
-    ready = true;
+    //ROS_ERROR_STREAM("RUNNING");
+
+    cv::Mat              input;
+    cv::Mat              edges;
+    cv::Mat              hsv;
+    cv::Mat              display;
+    std::vector<cv::Mat> channels(3);
+    input = getCurrentImage();
+
+    cv::cvtColor(input, hsv, CV_BGR2HSV);
+    cv::split(hsv, channels);
+    // Color
+    //channels[2] -= channels[1];
+    cv::medianBlur(channels[2], channels[2],
+                    config.dynamic.enhance_blur * 2 + 1);
+    cv::merge(channels, display);
+    cv::cvtColor(display, display, CV_HSV2BGR);
+
+    if (config.dynamic.edge_method == 0)
+        find_edges(display, edges);
+    else if (config.dynamic.edge_method == 1)
+        find_edges(channels[2], edges);
+    else if (config.dynamic.edge_method == 2)
+    {
+        cv::adaptiveThreshold(
+            channels[2], edges, 255,
+            config.dynamic.adap_use_gauss ? cv::ADAPTIVE_THRESH_MEAN_C
+                                            : cv::ADAPTIVE_THRESH_MEAN_C,
+            cv::THRESH_BINARY, config.dynamic.adap_block_size * 2 + 1,
+            config.dynamic.adap_c);
+    }
+    else
+    {
+        cv::Laplacian(channels[2], edges, -1,
+                        config.dynamic.lapla_ksize * 2 + 1);
+        cv::Sobel(edges, edges, -1, config.dynamic.sobel_xorder,
+                    config.dynamic.sobel_yorder,
+                    config.dynamic.sobel_ksize * 2 + 1);
+    }
+
+    float turn;
+    if (config.dynamic.lines_enable)
+    {
+        cv::Mat lines_mat = cv::Mat::zeros(edges.size(), edges.type());
+        std::vector<cv::Vec4i> lines;
+        cv::Rect               rect =
+            cv::Rect(0, config.dynamic.lines_top * edges.rows, edges.cols,
+                        edges.rows - config.dynamic.lines_top * edges.rows);
+
+        cv::HoughLinesP(edges(rect), lines, config.dynamic.lines_rho,
+                        0.01745329251, config.dynamic.lines_thresh,
+                        config.dynamic.lines_min_len,
+                        config.dynamic.lines_max_gap);
+
+        for (size_t i = 0; i < lines.size(); i++)
+        {
+            cv::Vec4i l = lines[i];
+
+            float diffx = l[0] - l[2];
+            float diffy = l[1] - l[3];
+
+            float slope = diffy / diffx;
+
+            if (std::abs(slope) < config.dynamic.lines_min_slope) continue;
+
+            diffx *= 5;
+            diffy *= 5;
+
+            l[0] -= diffx;
+            l[1] -= diffy;
+            l[2] += diffx;
+            l[3] += diffy;
+
+            cv::line(
+                lines_mat,
+                cv::Point(l[0],
+                            l[1] + config.dynamic.lines_top * edges.rows),
+                cv::Point(l[2],
+                            l[3] + config.dynamic.lines_top * edges.rows),
+                255, 5);
+        }
+
+        turn = blob_adjust(lines_mat, display);
+
+        debug_img_pub_bw(debug_pub_lines, lines_mat);
+    }
+    else
+    {
+        turn = blob_adjust(edges, display);
+    }
+
+    debug_img_pub_bw(debug_pub_edges, edges);
+    debug_img_pub_color(debug_pub_result, display);
+
+    cv::waitKey(3);
+
+    geometry_msgs::Twist twist;
+    twist.linear.x  = config.dynamic.drive_speed;
+    twist.angular.z = -config.dynamic.blob_mult * turn;
+
+    if (!config.dynamic.enable_drive)
+    {
+        twist.linear.x  = 0;
+        twist.angular.z = 0;
+    }
+    else if (!config.dynamic.enable_forward)
+    {
+        twist.linear.x = 0;
+    }
+
+    twist_pub.publish(twist);
+
+    limiter.sleep();
+
 }
 
 void Blob::debug_img_pub_color(image_transport::Publisher &pub,
@@ -402,15 +380,45 @@ float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
     return center_p.x - config.dynamic.blob_x;
 }
 
+bool Blob::hasSub(){
+    return twist_pub.getNumSubscribers();
+}
+
+bool Blob::isEnabled(){
+    return enabled;
+}
+
+void Blob::startup(){
+    image_sub = it.subscribe(camera_topic, 1, &Blob::dashcamCB, this);
+    enabled = false;
+}
+
+void Blob::shutdown(){
+    image_sub = image_transport::Subscriber();
+    enabled =  false;
+}
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "actor_ltu_route_blob");
-    try
-    {
-        Blob().run();
-    }
-    catch (const std::exception &e)
-    {
-        ROS_ERROR_STREAM(e.what());
+    ros::Rate r(10); 
+    Blob blob;
+
+    while (ros::ok()){
+        if (blob.hasSub()){
+            if (!blob.isEnabled()){
+                blob.startup();
+            }
+        } else {
+            if (blob.isEnabled()){
+                blob.shutdown();
+            }
+        }
+        ros::spinOnce();
+        r.sleep();
     }
 }
+
+/*
+getNumSubscribers
+*/
