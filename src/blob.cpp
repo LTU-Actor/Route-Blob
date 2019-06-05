@@ -68,7 +68,7 @@ Blob::Blob()
         throw std::invalid_argument("Bad camera topic");
     }
 
-    image_sub = it.subscribe(camera_topic, 1, &Blob::dashcamCB, this);
+    //image_sub = it.subscribe(camera_topic, 1, &Blob::dashcamCB, this);
 
     twist_pub = nh.advertise<geometry_msgs::Twist>("cmd", 1);
 
@@ -389,7 +389,7 @@ int main(int argc, char **argv)
     ros::init(argc, argv, "actor_ltu_route_blob");
     Blob blob;
 
-    ros::Rate r(10); 
+    ros::Rate r(30); 
 
     while (ros::ok()){
         if (blob.hasSub()){
