@@ -29,7 +29,7 @@ private:
     void dashcamCB(const sensor_msgs::ImageConstPtr &);
 
     std::string camera_topic;
-    bool      enabled = false;
+    bool enabled = false;
 
     // Main camera input
     image_transport::Subscriber image_sub;
@@ -46,13 +46,7 @@ private:
 
     // Server for run-time parameter adjustment
     dynamic_reconfigure::Server<ltu_actor_route_blob::BlobConfig> dyn_server;
-
-    struct {
-        // Dynamic reconfigure parameters
-        ltu_actor_route_blob::BlobConfig dynamic;
-
-        // Put other config paremeters (nav_controller) below
-    } config;
+    ltu_actor_route_blob::BlobConfig config;
 
     void  find_edges(cv::Mat &in, cv::Mat &out);
     float blob_adjust(const cv::Mat &edges, cv::Mat &debug_display);
@@ -67,6 +61,43 @@ Blob::Blob()
         ROS_ERROR_STREAM("No camera topic passed to " + camera_topic);
         throw std::invalid_argument("Bad camera topic");
     }
+
+    if (nh.hasParam("enable_drive")) { nh.getParam("enable_drive", config.enable_drive); }
+    if (nh.hasParam("enable_forward")) { nh.getParam("enable_forward", config.enable_forward); }
+    if (nh.hasParam("drive_speed")) { nh.getParam("drive_speed", config.drive_speed); }
+    if (nh.hasParam("edge_method")) { nh.getParam("edge_method", config.edge_method); }
+    if (nh.hasParam("canny_lower_thresh")) { nh.getParam("canny_lower_thresh", config.canny_lower_thresh); }
+    if (nh.hasParam("canny_upper_thresh")) { nh.getParam("canny_upper_thresh", config.canny_upper_thresh); }
+    if (nh.hasParam("canny_aperture_size")) { nh.getParam("canny_aperture_size", config.canny_aperture_size); }
+    if (nh.hasParam("adap_use_gauss")) { nh.getParam("adap_use_gauss", config.adap_use_gauss); }
+    if (nh.hasParam("adap_block_size")) { nh.getParam("adap_block_size", config.adap_block_size); }
+    if (nh.hasParam("adap_c")) { nh.getParam("adap_c", config.adap_c); }
+    if (nh.hasParam("lapla_ksize")) { nh.getParam("lapla_ksize", config.lapla_ksize); }
+    if (nh.hasParam("sobel_xorder")) { nh.getParam("sobel_xorder", config.sobel_xorder); }
+    if (nh.hasParam("sobel_yorder")) { nh.getParam("sobel_yorder", config.sobel_yorder); }
+    if (nh.hasParam("sobel_ksize")) { nh.getParam("sobel_ksize", config.sobel_ksize); }
+    if (nh.hasParam("enhance_blur")) { nh.getParam("enhance_blur", config.enhance_blur); }
+    if (nh.hasParam("blob_y")) { nh.getParam("blob_y", config.blob_y); }
+    if (nh.hasParam("blob_x")) { nh.getParam("blob_x", config.blob_x); }
+    if (nh.hasParam("blob_coeff")) { nh.getParam("blob_coeff", config.blob_coeff); }
+    if (nh.hasParam("blob_len")) { nh.getParam("blob_len", config.blob_len); }
+    if (nh.hasParam("blob_num_points")) { nh.getParam("blob_num_points", config.blob_num_points); }
+    if (nh.hasParam("blob_median_blur_size")) { nh.getParam("blob_median_blur_size", config.blob_median_blur_size); }
+    if (nh.hasParam("blob_dilation_size")) { nh.getParam("blob_dilation_size", config.blob_dilation_size); }
+    if (nh.hasParam("blob_mult")) { nh.getParam("blob_mult", config.blob_mult); }
+    if (nh.hasParam("blob_max_p_y")) { nh.getParam("blob_max_p_y", config.blob_max_p_y); }
+    if (nh.hasParam("lines_enable")) { nh.getParam("lines_enable", config.lines_enable); }
+    if (nh.hasParam("lines_thresh")) { nh.getParam("lines_thresh", config.lines_thresh); }
+    if (nh.hasParam("lines_rho")) { nh.getParam("lines_rho", config.lines_rho); }
+    if (nh.hasParam("lines_min_len")) { nh.getParam("lines_min_len", config.lines_min_len); }
+    if (nh.hasParam("lines_max_gap")) { nh.getParam("lines_max_gap", config.lines_max_gap); }
+    if (nh.hasParam("lines_top")) { nh.getParam("lines_top", config.lines_top); }
+    if (nh.hasParam("lines_min_slope")) { nh.getParam("lines_min_slope", config.lines_min_slope); }
+    if (nh.hasParam("show_edge_detect")) { nh.getParam("show_edge_detect", config.show_edge_detect); }
+    if (nh.hasParam("show_result")) { nh.getParam("show_result", config.show_result); }
+    if (nh.hasParam("show_blob")) { nh.getParam("show_blob", config.show_blob); }
+    if (nh.hasParam("show_lines")) { nh.getParam("show_lines", config.show_lines); }
+    
 
     //image_sub = it.subscribe(camera_topic, 1, &Blob::dashcamCB, this);
 
@@ -90,7 +121,7 @@ Blob::Blob()
 void Blob::dynConfigCB(ltu_actor_route_blob::BlobConfig &newconfig, uint32_t level)
 {
     // Mutex not needed. individual values will be atomic by x86 architecture.
-    config.dynamic = newconfig;
+    config = newconfig;
 }
 
 void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
@@ -121,48 +152,48 @@ void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
     // Color
     //channels[2] -= channels[1];
     cv::medianBlur(channels[2], channels[2],
-                    config.dynamic.enhance_blur * 2 + 1);
+                    config.enhance_blur * 2 + 1);
     cv::merge(channels, display);
 
     //ROS_ERROR_STREAM("CV_HSV2BGR");
 
     cv::cvtColor(display, display, CV_HSV2BGR);
 
-    if (config.dynamic.edge_method == 0)
+    if (config.edge_method == 0)
         find_edges(display, edges);
-    else if (config.dynamic.edge_method == 1)
+    else if (config.edge_method == 1)
         find_edges(channels[2], edges);
-    else if (config.dynamic.edge_method == 2)
+    else if (config.edge_method == 2)
     {
         cv::adaptiveThreshold(
             channels[2], edges, 255,
-            config.dynamic.adap_use_gauss ? cv::ADAPTIVE_THRESH_MEAN_C
+            config.adap_use_gauss ? cv::ADAPTIVE_THRESH_MEAN_C
                                             : cv::ADAPTIVE_THRESH_MEAN_C,
-            cv::THRESH_BINARY, config.dynamic.adap_block_size * 2 + 1,
-            config.dynamic.adap_c);
+            cv::THRESH_BINARY, config.adap_block_size * 2 + 1,
+            config.adap_c);
     }
     else
     {
         cv::Laplacian(channels[2], edges, -1,
-                        config.dynamic.lapla_ksize * 2 + 1);
-        cv::Sobel(edges, edges, -1, config.dynamic.sobel_xorder,
-                    config.dynamic.sobel_yorder,
-                    config.dynamic.sobel_ksize * 2 + 1);
+                        config.lapla_ksize * 2 + 1);
+        cv::Sobel(edges, edges, -1, config.sobel_xorder,
+                    config.sobel_yorder,
+                    config.sobel_ksize * 2 + 1);
     }
 
     float turn;
-    if (config.dynamic.lines_enable)
+    if (config.lines_enable)
     {
         cv::Mat lines_mat = cv::Mat::zeros(edges.size(), edges.type());
         std::vector<cv::Vec4i> lines;
         cv::Rect               rect =
-            cv::Rect(0, config.dynamic.lines_top * edges.rows, edges.cols,
-                        edges.rows - config.dynamic.lines_top * edges.rows);
+            cv::Rect(0, config.lines_top * edges.rows, edges.cols,
+                        edges.rows - config.lines_top * edges.rows);
 
-        cv::HoughLinesP(edges(rect), lines, config.dynamic.lines_rho,
-                        0.01745329251, config.dynamic.lines_thresh,
-                        config.dynamic.lines_min_len,
-                        config.dynamic.lines_max_gap);
+        cv::HoughLinesP(edges(rect), lines, config.lines_rho,
+                        0.01745329251, config.lines_thresh,
+                        config.lines_min_len,
+                        config.lines_max_gap);
 
         for (size_t i = 0; i < lines.size(); i++)
         {
@@ -173,7 +204,7 @@ void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
 
             float slope = diffy / diffx;
 
-            if (std::abs(slope) < config.dynamic.lines_min_slope) continue;
+            if (std::abs(slope) < config.lines_min_slope) continue;
 
             diffx *= 5;
             diffy *= 5;
@@ -186,9 +217,9 @@ void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
             cv::line(
                 lines_mat,
                 cv::Point(l[0],
-                            l[1] + config.dynamic.lines_top * edges.rows),
+                            l[1] + config.lines_top * edges.rows),
                 cv::Point(l[2],
-                            l[3] + config.dynamic.lines_top * edges.rows),
+                            l[3] + config.lines_top * edges.rows),
                 255, 5);
         }
 
@@ -207,15 +238,15 @@ void Blob::dashcamCB(const sensor_msgs::ImageConstPtr &msg)
     cv::waitKey(3);
 
     geometry_msgs::Twist twist;
-    twist.linear.x  = config.dynamic.drive_speed;
-    twist.angular.z = -config.dynamic.blob_mult * turn;
+    twist.linear.x  = config.drive_speed;
+    twist.angular.z = -config.blob_mult * turn;
 
-    if (!config.dynamic.enable_drive)
+    if (!config.enable_drive)
     {
         twist.linear.x  = 0;
         twist.angular.z = 0;
     }
-    else if (!config.dynamic.enable_forward)
+    else if (!config.enable_forward)
     {
         twist.linear.x = 0;
     }
@@ -243,9 +274,9 @@ void Blob::debug_img_pub_bw(image_transport::Publisher &pub,
 
 void Blob::find_edges(cv::Mat &in, cv::Mat &out)
 {
-    cv::Canny(in, out, config.dynamic.canny_lower_thresh,
-              config.dynamic.canny_upper_thresh,
-              config.dynamic.canny_aperture_size * 2 + 1);
+    cv::Canny(in, out, config.canny_lower_thresh,
+              config.canny_upper_thresh,
+              config.canny_aperture_size * 2 + 1);
 }
 
 float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
@@ -253,7 +284,7 @@ float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
     cv::Mat dilated;
     cv::Mat display = cv::Mat::zeros(edges.size(), CV_8UC3);
 
-    const int dilation_size  = config.dynamic.blob_dilation_size;
+    const int dilation_size  = config.blob_dilation_size;
     cv::Mat   dilate_element = cv::getStructuringElement(
         cv::MORPH_RECT,
         cv::Size(2 * dilation_size + 1, 2 * dilation_size + 1),
@@ -261,8 +292,8 @@ float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
 
     cv::dilate(edges, dilated, dilate_element);
 
-    if (config.dynamic.blob_median_blur_size > 0)
-        cv::medianBlur(dilated, dilated, config.dynamic.blob_median_blur_size * 2 + 1);
+    if (config.blob_median_blur_size > 0)
+        cv::medianBlur(dilated, dilated, config.blob_median_blur_size * 2 + 1);
 
     struct Point {
         float x;
@@ -270,25 +301,25 @@ float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
     };
 
     std::vector<Point> points;
-    points.reserve(config.dynamic.blob_num_points + 1);
+    points.reserve(config.blob_num_points + 1);
 
     for (float theta = 0; theta <= M_PI;
-         theta += M_PI / config.dynamic.blob_num_points)
+         theta += M_PI / config.blob_num_points)
     {
         Point p;
-        p.x = config.dynamic.blob_x;
-        p.y = config.dynamic.blob_y;
+        p.x = config.blob_x;
+        p.y = config.blob_y;
 
         float diffx = std::cos(theta) * .01;
         float diffy = -1 * std::sin(theta) * .01;
 
         while (dilated.at<uint8_t>(p.y * dilated.rows, p.x * dilated.cols)
-               < config.dynamic.blob_num_points)
+               < config.blob_num_points)
         {
             p.x += diffx;
             p.y += diffy;
 
-            float top_y = 1 - config.dynamic.blob_max_p_y;
+            float top_y = 1 - config.blob_max_p_y;
             if (p.y > 1 || p.y < top_y || p.x > 1 || p.x < 0)
             {
                 if (p.x > 1) p.x = 1;
@@ -308,7 +339,7 @@ float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
         points.push_back(p);
     }
 
-    Point center_p = {(float)config.dynamic.blob_x, (float)config.dynamic.blob_y};
+    Point center_p = {(float)config.blob_x, (float)config.blob_y};
     Point center_a = {0, 0};
 
     for (size_t i = 0; i < points.size(); i++)
@@ -328,7 +359,7 @@ float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
         diffy /= length;
 
         const float spring_force =
-            -1 * config.dynamic.blob_coeff * (length - config.dynamic.blob_len);
+            -1 * config.blob_coeff * (length - config.blob_len);
 
         diffx *= spring_force;
         diffy *= spring_force;
@@ -347,21 +378,21 @@ float Blob::blob_adjust(const cv::Mat &edges, cv::Mat &debug_display)
                cv::Point(center_p.x * display.cols, center_p.y * display.rows),
                5, cv::Scalar(0, 0, 255), -1);
     cv::circle(display,
-               cv::Point(config.dynamic.blob_x * display.cols,
-                         ((float)config.dynamic.blob_y) * display.rows),
+               cv::Point(config.blob_x * display.cols,
+                         ((float)config.blob_y) * display.rows),
                5, cv::Scalar(0, 255, 0), -1);
     cv::circle(debug_display,
                cv::Point(center_p.x * display.cols, center_p.y * display.rows),
                5, cv::Scalar(0, 0, 255), -1);
     cv::circle(debug_display,
-               cv::Point(config.dynamic.blob_x * display.cols,
-                         ((float)config.dynamic.blob_y) * display.rows),
+               cv::Point(config.blob_x * display.cols,
+                         ((float)config.blob_y) * display.rows),
                5, cv::Scalar(0, 255, 0), -1);
 
     debug_img_pub_color(debug_pub_blob, display);
     debug_img_pub_bw(debug_pub_dilated, dilated);
 
-    return center_p.x - config.dynamic.blob_x;
+    return center_p.x - config.blob_x;
 }
 
 bool Blob::hasSub(){
