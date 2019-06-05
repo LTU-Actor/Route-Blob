@@ -62,6 +62,25 @@ Blob::Blob()
         throw std::invalid_argument("Bad camera topic");
     }
 
+    //image_sub = it.subscribe(camera_topic, 1, &Blob::dashcamCB, this);
+
+    twist_pub = nh.advertise<geometry_msgs::Twist>("cmd", 1);
+
+    debug_pub_blob    = it.advertise("debug_blob", 1);
+    debug_pub_dilated = it.advertise("debug_dilated", 1);
+    debug_pub_lines   = it.advertise("debug_lines", 1);
+    debug_pub_edges   = it.advertise("debug_edges", 1);
+    debug_pub_result  = it.advertise("debug_result", 1);
+
+    dynamic_reconfigure::Server<ltu_actor_route_blob::BlobConfig>::CallbackType
+                          dynConfigCB;
+    ltu_actor_route_blob::BlobConfig default_config;
+    dynConfigCB = boost::bind(&Blob::dynConfigCB, this, _1, _2);
+    dyn_server.setCallback(dynConfigCB);
+    dyn_server.getConfigDefault(default_config);
+    dynConfigCB(default_config, 0);
+
+
     if (nh.hasParam("enable_drive")) { nh.getParam("enable_drive", config.enable_drive); }
     if (nh.hasParam("enable_forward")) { nh.getParam("enable_forward", config.enable_forward); }
     if (nh.hasParam("drive_speed")) { nh.getParam("drive_speed", config.drive_speed); }
@@ -97,25 +116,7 @@ Blob::Blob()
     if (nh.hasParam("show_result")) { nh.getParam("show_result", config.show_result); }
     if (nh.hasParam("show_blob")) { nh.getParam("show_blob", config.show_blob); }
     if (nh.hasParam("show_lines")) { nh.getParam("show_lines", config.show_lines); }
-    
-
-    //image_sub = it.subscribe(camera_topic, 1, &Blob::dashcamCB, this);
-
-    twist_pub = nh.advertise<geometry_msgs::Twist>("cmd", 1);
-
-    debug_pub_blob    = it.advertise("debug_blob", 1);
-    debug_pub_dilated = it.advertise("debug_dilated", 1);
-    debug_pub_lines   = it.advertise("debug_lines", 1);
-    debug_pub_edges   = it.advertise("debug_edges", 1);
-    debug_pub_result  = it.advertise("debug_result", 1);
-
-    dynamic_reconfigure::Server<ltu_actor_route_blob::BlobConfig>::CallbackType
-                          dynConfigCB;
-    ltu_actor_route_blob::BlobConfig default_config;
-    dynConfigCB = boost::bind(&Blob::dynConfigCB, this, _1, _2);
-    dyn_server.setCallback(dynConfigCB);
-    dyn_server.getConfigDefault(default_config);
-    dynConfigCB(default_config, 0);
+    dyn_server.updateConfig(config);
 }
 
 void Blob::dynConfigCB(ltu_actor_route_blob::BlobConfig &newconfig, uint32_t level)
