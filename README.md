@@ -1,6 +1,16 @@
 # Route-Blob
 
-Blob lane centering algorithm 
+![Overview](doc/Blob.png)
+
+## Summary
+
+Lane detection and centering is combined into a single algorithm designed specifically for centering a robot between two visible lines. It leverages OpenCV to do the processing on a color image.
+
+The algorithm begins by running one of a few methods of edge detection on the image, which are interchangeable at run-time. These include Canny edge detection (grayscale or color), adaptive threshold, and the Sobel operator. Most of the time the Canny (color) method is used.
+
+Next, a Hough transform is run on the edges to detect lines. Only lines within forty-five degrees of vertical are accepted. This is done to avoid detecting horizontal edges from stop lines and zebra-stripes. These lines are then extended and drawn on their own image for the final "blob" processing.
+
+Finally, a point CV (see Figure 5) is chosen to be just above the center of the front bumper. Twenty to one-hundred probe lines are sent out in a fan at even intervals between left and right above horizontal. When these probes find a pixel that has been filled by a Hough line, the distance and angle are recorded. If a probe does not find a line, the edge of the image is used. Each probe is then modeled as a spring to push or pull on the initial point toward the center of the lane CL. The horizontal component of this force is used as steering input for the vehicle. The nominal distance and force of the modeled springs is tuned for the vehicle.
 
 ## Required ROS Params
 
