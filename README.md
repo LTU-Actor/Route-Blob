@@ -1,5 +1,85 @@
 # Route-Blob
 
+Blob lane centering algorithm 
+
+## Required ROS Params
+
+`~input` name of camera topic this node subscribes to
+
+## Other ROS Params
+
+`~enable_drive` enables the vehicle to drive using the blob output
+
+`~enable_forward` enables the vehicle to try to always progress forward
+
+`~drive_speed` sets blob output drive speed
+
+`~edge_method`
+
+`~canny_lower_thresh` canny lower threshold value
+
+`~canny_upper_thresh` canny upper threshold value
+
+`~canny_aperture_size`
+
+`~adap_use_gauss`
+
+`~adap_block_size`
+
+`~adap_c`
+
+`~lapla_ksize`
+
+`~sobel_xorder`
+
+`~sobel_yorder`
+
+`~sobel_ksize`
+
+`~enhance_blur`
+
+`~blob_y`
+
+`~blob_x`
+
+`~blob_coeff`
+
+`~blob_len`
+
+`~blob_num_points`
+
+`~blob_median_blur_size`
+
+`~blob_dilation_size`
+
+`~blob_mult`
+
+`~blob_max_p_y`
+
+`~lines_enable` enables blob to check for lines in the image
+
+`~lines_thresh`
+
+`~lines_rho`
+
+`~lines_min_len` sets minimum length of the lines
+
+`~lines_max_gap`
+
+`~lines_top`
+
+`~lines_min_slope` sets the lines minimum slope
+
+`~show_edge_detect` show edges in debug ros topic
+
+`~show_result` display resulting vector in debug ros topic
+
+`~show_blob` display blob in debug ros topic
+
+`~show_lines` display lines in debug ros topic
+
+## Example Launch File
+
 ```xml
 <launch>
   <node pkg="ltu_actor_route_blob" type="blob" name="blob">
