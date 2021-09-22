@@ -28,14 +28,6 @@ generate_dynamic_reconfigure_options(
   cfg/Blob.cfg
 )
 
-
-generate_messages(
-    DEPENDENCIES
-    std_msgs
-    geometry_msgs
-    sensor_msgs
-)
-
 ###################################
 ## catkin specific configuration ##
 ###################################
